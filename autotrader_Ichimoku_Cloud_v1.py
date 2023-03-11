@@ -87,11 +87,17 @@ class AutoTrader(BaseAutoTrader):
         "Ichimoku cloud version 1 implementation"
         self.logger.info("received order book for instrument %d with sequence number %d", instrument,
                          sequence_number)
-        buy_price = bid_prices[0]
-        sell_price = ask_prices[0]
-        self.add_entry(buy_price, sell_price)
         if instrument == Instrument.ETF:
-            return
+            buy_price = bid_prices[0]
+            sell_price = ask_prices[0]
+            self.add_entry(buy_price, sell_price)
+
+            if self.if_buy(buy_price):
+                self.bid_id = next(self.order_ids)
+                self.bid_price = buy_price
+                self.send_insert_order(self.bid_id, Side.BUY, int(buy_price), 100, Lifespan.GOOD_FOR_DAY)
+                self.bids.add(self.bid_id)
+                return
 
     def on_order_filled_message(self, client_order_id: int, price: int, volume: int) -> None:
         """Called when one of your orders is filled, partially or fully.
@@ -147,7 +153,6 @@ class AutoTrader(BaseAutoTrader):
         self.logger.info("received trade ticks for instrument %d with sequence number %d", instrument,
                          sequence_number)
 
-    @staticmethod
     # 添加队列条目
     def add_entry(self, buy_price, sell_price):
         if self.entries > 52:
@@ -159,55 +164,50 @@ class AutoTrader(BaseAutoTrader):
         print(self.buy_prices)
         print('entries', self.entries)
 
-    @staticmethod
     # 计算9日线
-    def calc_conversion_line(prices):
+    def calc_conversion_line(self, prices):
+        print("cal 9")
         target_list = prices[-1:-10:-1]
         highest = max(target_list)
         lowest = min(target_list)
         return (highest+lowest)/2
 
-    @staticmethod
     # 计算26日线
-    def calc_baseline(prices):
+    def calc_baseline(self, prices):
+        print("cal 26")
         target_list = prices[-1:-27:-1]
         highest = max(target_list)
         lowest = min(target_list)
         return (highest+lowest)/2
 
-    @staticmethod
-    def calc_leading_span_a(conversionLinePrice, baseLinePrice):
+    def calc_leading_span_a(self, conversionLinePrice, baseLinePrice):
         return (conversionLinePrice + baseLinePrice) / 2
 
-    @staticmethod
     # 计算52日线
-    def calc_leading_span_b(prices):
+    def calc_leading_span_b(self, prices):
+        print("cal 52")
         target_list = prices[-1:-52:-1]
         highest = max(target_list)
         lowest = min(target_list)
         return (highest+lowest)/2
 
-    @staticmethod
     # 计算云带价格
     def get_cloud(self, conversionLinePrice, baseLinePrice, prices):
         leadingSpanA = self.calc_leading_span_a(conversionLinePrice, baseLinePrice)
         leadingSpanB = self.calc_leading_span_b(prices)
         return max(leadingSpanA, leadingSpanB)
 
-    @staticmethod
     # 当前价格是否比云带价格高
-    def is_above_cloud(cloudPrice, currentAskPrice):
+    def is_above_cloud(self, cloudPrice, currentAskPrice):
         return currentAskPrice > cloudPrice
 
-    @staticmethod
     # 是否满足购买条件
     def if_buy(self, buy_price):
         if self.entries < 52:
             return False
         conversionLine = self.calc_conversion_line(self.buy_prices)
-        baseLine = self.calc_base_line(self.buy_prices)
+        baseLine = self.calc_baseline(self.buy_prices)
         cloudPoint = self.get_cloud(conversionLine, baseLine, self.buy_prices)
-        print(self.stock)
         print('Conversion Line over Base Line: ', conversionLine > baseLine)
         print('Positions:', self.positions)
         print('Cloud Point: ', cloudPoint)
@@ -219,13 +219,12 @@ class AutoTrader(BaseAutoTrader):
             return True
         return False
 
-    @staticmethod
     # 是否满足卖出条件
     def if_sell(self, sell_price):
         if self.entries < 52:
             return False
         conversionLine = self.calc_conversion_line(self.sell_prices)
-        baseLine = self.calc_base_line(self.sell_prices)
+        baseLine = self.calc_baseline(self.sell_prices)
         cloudPoint = self.get_cloud(conversionLine, baseLine, self.sell_prices)
         if conversionLine < baseLine and self.buy_price and self.buy_price < sell_price:
             self.positions = 0
