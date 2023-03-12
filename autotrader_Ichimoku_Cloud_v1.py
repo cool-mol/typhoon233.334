@@ -93,6 +93,10 @@ class AutoTrader(BaseAutoTrader):
             self.add_entry(buy_price, sell_price)
 
             if self.if_buy(buy_price):
+                if self.bid_id != 0 and buy_price not in (self.bid_price, 0):
+                    self.send_cancel_order(self.bid_id)
+                    self.bid_id = 0
+
                 self.bid_id = next(self.order_ids)
                 self.bid_price = buy_price
                 self.send_insert_order(self.bid_id, Side.BUY, int(buy_price), 100, Lifespan.GOOD_FOR_DAY)
@@ -166,7 +170,6 @@ class AutoTrader(BaseAutoTrader):
 
     # 计算9日线
     def calc_conversion_line(self, prices):
-        print("cal 9")
         target_list = prices[-1:-10:-1]
         highest = max(target_list)
         lowest = min(target_list)
@@ -174,7 +177,6 @@ class AutoTrader(BaseAutoTrader):
 
     # 计算26日线
     def calc_baseline(self, prices):
-        print("cal 26")
         target_list = prices[-1:-27:-1]
         highest = max(target_list)
         lowest = min(target_list)
@@ -185,7 +187,6 @@ class AutoTrader(BaseAutoTrader):
 
     # 计算52日线
     def calc_leading_span_b(self, prices):
-        print("cal 52")
         target_list = prices[-1:-52:-1]
         highest = max(target_list)
         lowest = min(target_list)
